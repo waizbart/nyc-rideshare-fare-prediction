@@ -1,0 +1,20 @@
+FROM quay.io/jupyter/pyspark-notebook:spark-3.5.0
+
+USER root
+
+# pyspark==3.5.0 corresponde ao Spark do cluster (apache/spark:3.5.8-python3 e' compativel via wire protocol).
+# Instalar como pacote Python torna `import pyspark` disponivel para qualquer interpretador,
+# nao so o wrapper /usr/local/spark/bin/pyspark.
+RUN pip install --no-cache-dir \
+    pyspark==3.5.0 \
+    matplotlib \
+    pandas \
+    pyarrow \
+    scikit-learn \
+    seaborn \
+    torch \
+    torchaudio \
+    torchvision
+
+USER ${NB_UID}
+
