@@ -2,6 +2,8 @@
 
 Projeto final de Big Data para regressao de tarifa de corridas HVFHV da TLC de Nova York usando PySpark, Spark SQL, MLlib e PyTorch.
 
+Dataset: https://www.kaggle.com/datasets/aaronweymouth/nyc-rideshare-raw-data
+
 ## Objetivo
 
 Prever `base_passenger_fare` a partir de sinais temporais, espaciais e operacionais, mantendo um pipeline end-to-end reproduzivel:
