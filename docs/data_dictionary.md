@@ -2,7 +2,10 @@
 
 ## Fonte
 
-Dataset HVFHV da NYC TLC, periodo de janeiro/2022 a agosto/2023, com uma linha por viagem em formato Parquet.
+Dataset HVFHV da NYC TLC, com uma linha por viagem em formato Parquet.
+
+- Range bruto disponivel na TLC: janeiro/2022 a agosto/2023.
+- Recorte em uso neste projeto: marco/2023 a agosto/2023 (6 meses), suficiente para o split temporal `SPLIT_DATE = "2023-06-01"`.
 
 ## Colunas principais
 

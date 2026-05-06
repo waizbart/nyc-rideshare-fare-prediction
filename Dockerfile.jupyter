@@ -2,19 +2,23 @@ FROM quay.io/jupyter/pyspark-notebook:spark-3.5.0
 
 USER root
 
-# pyspark==3.5.0 corresponde ao Spark do cluster (apache/spark:3.5.8-python3 e' compativel via wire protocol).
-# Instalar como pacote Python torna `import pyspark` disponivel para qualquer interpretador,
-# nao so o wrapper /usr/local/spark/bin/pyspark.
+# git no container habilita o registro de git_sha em model_comparison.csv (_lib.append_metric).
+RUN apt-get update && apt-get install -y --no-install-recommends git \
+    && rm -rf /var/lib/apt/lists/*
+
+# Versoes pinadas para reproducibilidade. pyspark==3.5.0 acompanha o Spark do cluster
+# (apache/spark:3.5.8-python3 e compativel via wire protocol). Demais pacotes sao
+# travados em versoes que ja foram validadas com este pipeline.
 RUN pip install --no-cache-dir \
     pyspark==3.5.0 \
-    matplotlib \
-    pandas \
-    pyarrow \
-    scikit-learn \
-    seaborn \
-    torch \
-    torchaudio \
-    torchvision
+    pandas==2.2.3 \
+    numpy==1.26.4 \
+    pyarrow==16.1.0 \
+    scikit-learn==1.5.2 \
+    matplotlib==3.9.2 \
+    seaborn==0.13.2 \
+    torch==2.4.1 \
+    torchvision==0.19.1 \
+    torchaudio==2.4.1
 
 USER ${NB_UID}
-

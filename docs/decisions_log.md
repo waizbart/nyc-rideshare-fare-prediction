@@ -22,8 +22,8 @@
 ### Decisao: estrategia de iteracao
 
 - Bootstrap inicial com `fhvhv_tripdata_2023-08.parquet`
-- Expansao para todo o range 2022-2023 depois do smoke test do pipeline
-- Motivo: reduzir custo de iteracao no inicio e diminuir risco de OOM
+- Expansao parcial para `2023-03` a `2023-08` (6 meses, ~3 GB compactado), nao para o range 2022-2023 completo
+- Motivo: reduzir custo de iteracao e risco de OOM nos workers de 4 GB; com 6 meses cabe na RAM, o split `2023-06-01` mantem 3 meses de cada lado e o pipeline roda end-to-end sem amostragem
 
 ### Restricao operacional descoberta no bootstrap
 
@@ -85,3 +85,53 @@ Revisao linha-a-linha dos notebooks 02-05 antes da primeira rodada end-to-end. B
 `02_preprocessing` cell de audit agora tambem reporta:
 - `null_borough_rows` (suporte ao B2)
 - `null_airport_fee_rows` (rastreabilidade do `airport_fee` ausente em corridas pre-meados/2022, ja documentado em CLAUDE.md secao 2)
+
+## 2026-04-29 - rodada 2 de melhorias (perspectiva de engenharia de dados senior)
+
+Antes do primeiro end-to-end, segunda rodada de revisao focada em qualidade de codigo, reprodutibilidade e arquitetura. Mudancas aplicadas:
+
+### M1 - Deps Python pinadas no `Dockerfile.jupyter`
+
+- Sintoma: somente `pyspark==3.5.0` estava pinado. `torch`, `pandas`, `numpy`, `scikit-learn`, `matplotlib`, `seaborn` flutuavam. O bug B4 (sklearn>=1.6 removendo `squared=False`) foi consequencia direta disso.
+- Correcao: pinar `pandas==2.2.3`, `numpy==1.26.4`, `pyarrow==16.1.0`, `scikit-learn==1.5.2`, `matplotlib==3.9.2`, `seaborn==0.13.2`, `torch==2.4.1` + companheiros. Imagem agora reconstroi identica entre maquinas.
+- Tambem instalado `git` no container para habilitar registro de `git_sha` em `model_comparison.csv`.
+
+### M2 - Modulo `notebooks/_lib.py` para constantes e factory de SparkSession
+
+- Sintoma: `NUMERIC_COLS`, `CATEGORICAL_COLS`, `SEED`, `SPLIT_DATE`, `SILVER_PATH`, `TARGET_COL` e o builder do SparkSession estavam copiados em 03/04/05. Risco de drift silencioso entre modelos (alterar features em um sem propagar nos outros distorce a comparacao).
+- Correcao: extracao para `_lib.py`. Notebooks importam via `sys.path.insert(0, '/home/jovyan/work/notebooks')` e `from _lib import ...`. Single source of truth.
+
+### M3 - SparkSession com `shuffle.partitions=32` e AQE explicito
+
+- Sintoma: `spark.sql.shuffle.partitions=200` para ~3 GB de dados gerava tasks de <1s onde o overhead de scheduler dominava. AQE habilitado por default no Spark 3.5 mas nao explicitado.
+- Correcao: `shuffle.partitions=32`, `spark.sql.adaptive.enabled=true`, `spark.sql.adaptive.coalescePartitions.enabled=true`. Documenta intencao e protege de regressao em upgrades.
+
+### M4 - Persistencia de `cleaning_bounds`
+
+- Sintoma: `PERCENTILE_APPROX` recomputado a cada run, sem registro do corte usado. Reruns produzem silvers ligeiramente diferentes; auditoria fica impossivel.
+- Correcao: bounds gravados em `/results/cleaning_bounds.json` no notebook 02 logo apos o calculo. Material para o relatorio e base para detectar drift.
+
+### M5 - Piso de `speed_mph > 0.5`
+
+- Sintoma: o filtro percentilico admite `speed_mph = 0` se houver muitas viagens com `trip_miles ~ 0`. Corridas a 0 mph sao ruido (cancelamento mascarado, GPS travado).
+- Correcao: `AND speed_mph > 0.5` adicionado ao silver. Percentual removido a mais e auditado pelo gate da M7.
+
+### M6 - `repartition('pickup_year_month')` antes do write da silver
+
+- Sintoma: `partitionBy('pickup_year_month')` sem repartition previo gera ate `shuffle.partitions x particoes_logicas` part-files. Com 32 x 6 = ate 192 arquivos pequenos.
+- Correcao: `repartition('pickup_year_month')` antes do write -> 1 arquivo Parquet por mes (~6 arquivos totais).
+
+### M7 - DQ gate explicito no silver
+
+- Sintoma: a auditoria reportava drop% mas nao falhava o pipeline. Silver corrompida silenciosamente seguia para os modelos.
+- Correcao: `assert pct_rows_removed < 20.0` apos a contagem. Schema drift, bounds mal calibrados ou bronze suja agora abortam o notebook.
+
+### M8 - Checkpoint completo da NN
+
+- Sintoma: `torch.save` no notebook 05 persistia `state_dict` e `feature_columns` mas nao `scaler.mean_` / `scaler.scale_`. Inferencia em outra maquina exigia retreinar o scaler.
+- Correcao: checkpoint inclui `scaler_mean`, `scaler_scale`, `categorical_cols` e `numeric_cols`. Train/serve parity restaurada.
+
+### M9 - `model_comparison.csv` append-only com `run_id`/`timestamp_utc`/`git_sha`
+
+- Sintoma: o codigo anterior fazia upsert por `model`, sobrescrevendo runs anteriores. Timeline de experimentos era perdida.
+- Correcao: helper `_lib.append_metric` adiciona uma linha por run com identificador, timestamp UTC e git SHA curto. Permite comparar runs ao longo do tempo e correlacionar metrica com versao do codigo.

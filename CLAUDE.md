@@ -26,10 +26,11 @@ NYC TLC HVFHV (High-Volume For-Hire Vehicle) Trip Records, redistribuído no Kag
 
 ### Características
 
-- Período: janeiro/2022 a agosto/2023
+- Período do dataset bruto da TLC: janeiro/2022 a agosto/2023
+- **Recorte em uso no projeto**: 2023-03 a 2023-08 (6 meses, ~3 GB compactados). Cabe na RAM dos workers e mantém o `SPLIT_DATE=2023-06-01` viável (3 meses de treino, 3 meses de teste).
 - Granularidade: uma linha por viagem
 - Formato: Parquet
-- Volume: ~360 milhões de linhas, ~12 a 15 GB compactados
+- Volume bruto referência: ~360 milhões de linhas, ~12 a 15 GB compactados
 - Cobre 4 operadoras: Uber, Lyft, Via, Juno
 
 ### Esquema (24 colunas)

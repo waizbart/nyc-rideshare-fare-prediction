@@ -62,12 +62,11 @@ docker compose ps
 
 ## Dados esperados em `data/`
 
-- `fhvhv_tripdata_2022-01.parquet` ate `fhvhv_tripdata_2023-08.parquet`
-- `taxi_zone_lookup.csv`
+Recorte atual em uso no projeto: `fhvhv_tripdata_2023-03.parquet` ate `fhvhv_tripdata_2023-08.parquet` (6 meses, ~3 GB compactado), alem de `taxi_zone_lookup.csv`.
 
-Para iteracao inicial, o plano recomenda comecar por `fhvhv_tripdata_2023-08.parquet` e expandir para o range completo depois que o pipeline estiver estavel.
+O dataset bruto da TLC cobre janeiro/2022 a agosto/2023; o recorte 2023-03 a 2023-08 e suficiente para o split temporal `SPLIT_DATE = "2023-06-01"` (treino: marco a maio; teste: junho a agosto) e cabe na RAM dos workers de 4 GB.
 
-Importante: esse mes isolado serve para smoke test de ingestao e EDA inicial. Os notebooks de modelagem exigem dados antes e depois de `2023-06-01`, senao o split temporal fica sem conjunto de treino ou sem conjunto de teste.
+Importante: o pipeline de modelagem exige dados antes e depois de `2023-06-01`. Rodar com um unico mes deixa um dos lados do split vazio.
 
 ## Ordem recomendada de execucao
 
