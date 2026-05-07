@@ -6,11 +6,10 @@ USER root
 RUN apt-get update && apt-get install -y --no-install-recommends git \
     && rm -rf /var/lib/apt/lists/*
 
-# Versoes pinadas para reproducibilidade. pyspark==3.5.0 acompanha o Spark do cluster
-# (apache/spark:3.5.8-python3 e compativel via wire protocol). Demais pacotes sao
-# travados em versoes que ja foram validadas com este pipeline.
+# Versoes pinadas para reproducibilidade. pyspark==3.5.8 alinha com os workers
+# (apache/spark:3.5.8-python3) para evitar divergencia de wire protocol entre driver e executor.
 RUN pip install --no-cache-dir \
-    pyspark==3.5.0 \
+    pyspark==3.5.8 \
     pandas==2.2.3 \
     numpy==1.26.4 \
     pyarrow==16.1.0 \
@@ -20,5 +19,10 @@ RUN pip install --no-cache-dir \
     torch==2.4.1 \
     torchvision==0.19.1 \
     torchaudio==2.4.1
+
+# Sobrescreve SPARK_HOME para usar os JARs do pyspark pip (3.5.8) em vez do
+# Spark do sistema na imagem base (3.5.0). Sem isso, o driver serializa tasks
+# com JARs 3.5.0 enquanto os workers rodam 3.5.8, causando InvalidClassException.
+ENV SPARK_HOME=/opt/conda/lib/python3.11/site-packages/pyspark
 
 USER ${NB_UID}

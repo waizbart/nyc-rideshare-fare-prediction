@@ -51,6 +51,7 @@ services:
       context: .
       dockerfile: Dockerfile.jupyter
     container_name: jupyter
+    user: root
     depends_on:
       - spark-master
       - spark-worker-1
