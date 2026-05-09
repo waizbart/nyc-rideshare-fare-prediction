@@ -8,7 +8,7 @@ Uso tipico no inicio de um notebook:
 
     import sys
     sys.path.insert(0, '/home/jovyan/work/notebooks')
-    from _lib import build_spark, SEED, SPLIT_DATE, SILVER_PATH, ...
+    from _lib import build_spark, SEED, SPLIT_DATE, CLEAN_DATA_PATH, ...
 
     spark = build_spark('nome-do-app')
 
@@ -43,7 +43,7 @@ SPLIT_DATE = '2023-06-01'
 
 DATA_GLOB = '/data/rideshare_data.parquet'
 LOOKUP_PATH = '/data/taxi_zone_lookup.csv'
-SILVER_PATH = '/data/silver/trips_silver'
+CLEAN_DATA_PATH = '/data/silver/trips_silver'
 
 RESULTS_DIR = Path('/results')
 RESULTS_PATH = RESULTS_DIR / 'model_comparison.csv'

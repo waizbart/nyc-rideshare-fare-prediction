@@ -14,7 +14,7 @@
 | 2 | Problema e motivação | 1 min |
 | 3 | Dataset | 2 min |
 | 4 | Arquitetura do ambiente | 1 min |
-| 5 | Pipeline de dados — Bronze → Silver | 2 min |
+| 5 | Pipeline de dados — limpeza e features | 2 min |
 | 6 | EDA — principais achados | 2 min |
 | 7 | Features engineered | 1 min |
 | 8 | Modelo 1: Linear Regression | 1.5 min |
@@ -109,20 +109,20 @@ Por que temporal e não aleatório? Evita data leakage — o modelo nunca vê o 
 
 ---
 
-## Slide 5 — Pipeline de dados: Bronze → Silver
+## Slide 5 — Pipeline de dados: limpeza e features
 
 **Diagrama de fluxo:**
 ```
 rideshare_data.parquet (365M linhas)
         │
         ▼ filtro temporal (Mar–Ago 2023)
-   trips_bronze (116.2M linhas)
+   trips_raw (116.2M linhas)
         │
-        ▼ limpeza + feature engineering
-   trips_silver (110.1M linhas)  ← 5.26% drop (DQ gate)
+        ▼ limpeza por percentil + feature engineering
+   trips_clean (110.1M linhas)  ← 5.26% drop (DQ gate)
         │
         ▼ particionado por pickup_year_month
-   /data/silver/trips_silver/
+   /data/silver/trips_silver/   (parquet em disco)
 ```
 
 **Limpeza (Spark SQL puro):**
@@ -141,7 +141,15 @@ rideshare_data.parquet (365M linhas)
 
 ## Slide 6 — EDA: principais achados
 
-Escolher 3–4 dos achados mais interessantes do notebook 01. Sugestões:
+Escolher 3–4 dos achados mais interessantes do notebook 01. Plots disponíveis (ver `01_eda.ipynb`):
+- Histograma da tarifa em escala linear + log
+- Tarifa média e mediana por hora do dia (com bandas de rush/madrugada)
+- Heatmap de tarifa por dia da semana × hora
+- Boxplot Uber vs Lyft (tarifa por bucket de distância)
+- Tarifa média e volume por borough
+- Hexbin `trip_length × passenger_fare`
+- Volume de corridas por hora e top 10 zonas de embarque
+- Matriz OD por borough
 
 **Achado 1 — Distribuição da tarifa**
 - Mediana ~$17–22, cauda longa até >$100 (corridas para aeroporto)
@@ -157,7 +165,7 @@ Escolher 3–4 dos achados mais interessantes do notebook 01. Sugestões:
 - Justifica `pu_borough` e `do_borough` como features categóricas
 
 **Achado 4 — Correlação distância × tarifa**
-- Correlação mais forte entre `trip_length` e `passenger_fare` (~0.7)
+- Correlação mais forte entre `trip_length` e `passenger_fare` (~0.88)
 - Mas não linear: surge pricing, rotas de aeroporto, etc.
 
 ---
@@ -195,7 +203,15 @@ Treino:     56.3M linhas (conjunto completo)
 | R² | 0.806 |
 | RMSE | $9.07 |
 | MAE | $5.76 |
-| Tempo treino | 241s |
+| Tempo treino | 229s |
+
+**Plots disponíveis (`03_linear_regression.ipynb`):**
+- Coeficientes (interpretáveis em USD por desvio padrão)
+- Predito vs Real em hexbin (densidade próxima da diagonal)
+- RMSE/MAE por borough
+- RMSE/MAE por bucket de distância
+- Resíduo médio por hora do dia + MAE
+- Histograma e scatter de resíduos
 
 **Análise estratificada:**
 - Erro maior em Manhattan (corridas mais variáveis) e viagens 10+ mi
@@ -221,12 +237,19 @@ Treino:     56.3M linhas (conjunto completo)
 **Métricas:**
 | Métrica | Valor |
 |---------|-------|
-| R² | **0.813** |
-| RMSE | **$8.91** |
+| R² | 0.813 |
+| RMSE | $8.91 |
 | MAE | $5.13 |
-| Tempo treino | 462s |
+| Tempo treino | 436s |
 
-**Print:** gráfico `feature_importance_decision_tree.png`  
+**Plots disponíveis (`04_decision_tree.ipynb`):**
+- Importância das features (top 15)
+- Predito vs Real em hexbin
+- RMSE/MAE por borough
+- RMSE/MAE por bucket de distância
+- Resíduo médio por hora × operadora (Uber vs Lyft)
+- Histograma e scatter de resíduos
+
 Top features esperadas: `trip_length`, `speed_mph`, `total_ride_time`, `pickup_airport`
 
 **O que falar:**
@@ -248,23 +271,30 @@ Arquitetura:  256 → BN → ReLU → Dropout(0.2)
               64  → ReLU → 1
 Loss:         MSELoss em log(passenger_fare)
 Optimizer:    Adam (lr=1e-3) + ReduceLROnPlateau
-Dados:        1.6M linhas amostradas via Spark
+Dados:        1.28M linhas estratificadas Mar+Abr+Mai (~427k/mês)
 ```
 
 **Métricas:**
 | Métrica | Valor |
 |---------|-------|
-| R² | 0.796 |
-| RMSE | $9.13 |
-| MAE | **$4.72** |
-| Tempo treino | 821s |
+| R² | **0.815** |
+| RMSE | **$8.91** |
+| MAE | **$4.94** |
+| Tempo treino | 555s |
 
-**Print:** gráfico `residual_analysis_neural_network.png` (curva de loss + histograma de resíduos)
+**Plots disponíveis (`05_neural_network.ipynb`):**
+- Curva de loss train/val + LR schedule (ReduceLROnPlateau)
+- Predito vs Real em hexbin
+- RMSE/MAE por borough
+- RMSE/MAE por bucket de distância
+- Boxplot de resíduo por bucket de distância × operadora
+- Histograma e scatter de resíduos
 
 **O que falar:**
-- NN tem o **menor MAE** ($4.72) — erra menos nas corridas do dia a dia
-- Log-transform do target foi decisivo: MAE caiu de $6.89 → $4.72
-- Limitação de hardware: PyTorch não é distribuído. `toPandas()` de 5M linhas causou OOM. Máximo viável na máquina de 8GB: 1.6M linhas (~3% do treino total)
+- NN tem o **menor MAE** ($4.94) e o **maior R²** ($0.815) — empata com DT em RMSE e supera em todos os outros critérios
+- Log-transform do target foi decisivo: MAE caiu de $6.89 → $4.94
+- Amostragem estratificada (Mar+Abr+Mai com peso igual) supera amostragem aleatória, que enviesa para os primeiros meses
+- Limitação de hardware: PyTorch não é distribuído. `toPandas()` de 5M linhas causou OOM. Viável na máquina de 8GB: 1.28M linhas (~2% do treino total)
 - Justificativa metodológica: o objetivo é demonstrar capacidade do modelo, não throughput
 
 ---
@@ -275,9 +305,9 @@ Dados:        1.6M linhas amostradas via Spark
 
 | Modelo | R² | RMSE | MAE | Treino | Dados |
 |--------|----|------|-----|--------|-------|
-| Linear Regression | 0.806 | $9.07 | $5.76 | 241s | 56.3M |
-| **Decision Tree** | **0.813** | **$8.91** | $5.13 | 462s | 56.3M |
-| Neural Network | 0.796 | $9.13 | **$4.72** | 821s | 1.6M |
+| Linear Regression | 0.806 | $9.07 | $5.76 | 229s | 56.3M |
+| Decision Tree | 0.813 | $8.91 | $5.13 | 436s | 56.3M |
+| **Neural Network** | **0.815** | **$8.91** | **$4.94** | 555s | 1.28M |
 
 **Análise estratificada por borough (Decision Tree):**
 | Borough | RMSE | MAE |
@@ -300,8 +330,8 @@ Dados:        1.6M linhas amostradas via Spark
 **O que falar:**
 - EWR tem RMSE $80: apenas 3 corridas no teste, estatisticamente irrelevante
 - Corridas 10+ mi têm RMSE 3.6× maior que 0–2 mi: surge pricing e aeroportos tornam essas corridas imprevisíveis
-- Decision Tree: melhor globalmente
-- NN: melhor MAE — menos erros grandes nas corridas típicas
+- Neural Network: melhor R² (0.815), empate em RMSE com DT, melhor MAE ($4.94)
+- Decision Tree: equivalente em RMSE, mais robusto e interpretável (importance plot direto)
 - LR: mais rápido e interpretável, R² competitivo, bom baseline
 
 ---
@@ -356,7 +386,7 @@ Esta seção é crítica para o requisito "desafios enfrentados". Escolher 4–5
 
 **Infraestrutura:**
 - MLflow para rastreamento de experimentos (substitui `model_comparison.csv` manual)
-- Delta Lake para versionamento da silver layer
+- Delta Lake para versionamento do dataset preparado em disco
 - Testes de data quality automáticos com Great Expectations
 
 ---
@@ -368,9 +398,9 @@ Esta seção é crítica para o requisito "desafios enfrentados". Escolher 4–5
 > Com PySpark, Spark SQL e MLlib, processamos **110 milhões de corridas** de Uber e Lyft de Nova York em um cluster Spark local containerizado, treinando 3 modelos de regressão para prever `passenger_fare`.
 
 **Resultados-chave:**
-- Decision Tree explica **81.3% da variação** da tarifa (R²=0.813)
-- Erro médio absoluto de **$5.13** — em uma tarifa mediana de ~$22, isso é ~23% de erro relativo
-- Neural Network com log-transform atinge MAE de **$4.72** na amostra
+- Neural Network explica **81.5% da variação** da tarifa (R²=0.815) com MAE de **$4.94**
+- Decision Tree fica em 81.3% (R²=0.813) com MAE de **$5.13** sobre o conjunto completo
+- Em uma tarifa mediana de ~$22, MAE de $4.94 representa ~22% de erro relativo
 
 **O que o projeto demonstrou:**
 1. Pipeline Big Data end-to-end reproduzível em Docker
@@ -395,6 +425,6 @@ Preparar para mostrar ao vivo ou em vídeo gravado:
 ## Notas de apresentação
 
 - Não é necessário mostrar todo o código nos slides — mostrar outputs (gráficos, tabelas de métricas)
-- Ao falar de R²: "0.813 significa que o modelo explica 81.3% da variação na tarifa. Os 18.7% restantes são surge pricing não modelado, condições de tráfego em tempo real e fatores que não estão no dataset."
-- Ao falar de MAE $4.72: "Em uma corrida típica de $22, o modelo erra em média $4.72 — um erro relativo de 21%. Para contexto: a própria plataforma aplica surge multipliers que podem variar a tarifa em 30–50% em minutos."
+- Ao falar de R²: "0.815 significa que o modelo explica 81.5% da variação na tarifa. Os 18.5% restantes são surge pricing não modelado, condições de tráfego em tempo real e fatores que não estão no dataset."
+- Ao falar de MAE $4.94: "Em uma corrida típica de $22, o modelo erra em média $4.94 — um erro relativo de 22%. Para contexto: a própria plataforma aplica surge multipliers que podem variar a tarifa em 30–50% em minutos."
 - Ao falar de desafios: mostrar confiança — bugs complexos resolvidos demonstram maturidade técnica

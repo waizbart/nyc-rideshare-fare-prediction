@@ -44,12 +44,12 @@ Schema real do arquivo conforme inspeção (`spark.read.parquet(...).printSchema
 
 ---
 
-## Camada bronze — `trips_bronze` (view temporária)
+## Recorte temporal — `trips_raw` (view temporária)
 
 Filtro de escopo temporal aplicado sobre o raw:
 
 ```sql
-CREATE OR REPLACE TEMPORARY VIEW trips_bronze AS
+CREATE OR REPLACE TEMPORARY VIEW trips_raw AS
 SELECT * FROM trips_raw
 WHERE date >= '2023-03-01'
   AND date <  '2023-09-01'
@@ -63,11 +63,11 @@ WHERE date >= '2023-03-01'
 
 ---
 
-## Camada silver — `trips_silver` (Parquet particionado)
+## Dataset preparado — `trips_clean` (Parquet particionado)
 
-**Path:** `/data/silver/trips_silver/`  
+**Path:** `/data/silver/trips_silver/` (path mantido por compatibilidade com o storage existente)  
 **Particionamento:** `pickup_year_month` (formato `'YYYY-MM'`)  
-**Linhas:** ~110.1M (5.26% de drop do bronze pelo DQ gate)
+**Linhas:** ~110.1M (5.26% de drop do recorte temporal pelo DQ gate)
 
 ### Limpeza aplicada
 
@@ -84,7 +84,7 @@ WHERE date >= '2023-03-01'
 
 Os limites calculados são persistidos em `results/cleaning_bounds.json` para auditoria e reprodutibilidade.
 
-### Schema completo da silver
+### Schema completo do dataset preparado
 
 | Coluna | Tipo | Origem |
 |--------|------|--------|

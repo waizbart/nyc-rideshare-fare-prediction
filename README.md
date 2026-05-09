@@ -10,11 +10,11 @@ Dataset: https://www.kaggle.com/datasets/aaronweymouth/nyc-rideshare-raw-data
 
 | Modelo | R² | RMSE | MAE | Tempo treino |
 |--------|----|------|-----|--------------|
-| Linear Regression (MLlib) | 0.806 | $9.07 | $5.76 | 241s |
-| Decision Tree depth=8 (MLlib) | **0.813** | **$8.91** | $5.13 | 462s |
-| Neural Network (PyTorch) | 0.796 | $9.13 | **$4.72** | 821s |
+| Linear Regression (MLlib) | 0.806 | $9.07 | $5.76 | 229s |
+| Decision Tree depth=8 (MLlib) | 0.813 | $8.91 | $5.13 | 436s |
+| Neural Network (PyTorch) | **0.815** | **$8.91** | **$4.94** | 555s |
 
-LR e DT treinam no conjunto completo de 56M corridas (Mar–Mai 2023). A NN usa amostra de 1.6M linhas — limitação de RAM, já que PyTorch não é distribuído.
+LR e DT treinam no conjunto completo de 56M corridas (Mar–Mai 2023). A NN usa amostra estratificada de 1.28M linhas (Mar+Abr+Mai com ~427k cada) — limitação de RAM, já que PyTorch não é distribuído.
 
 ---
 
@@ -22,7 +22,7 @@ LR e DT treinam no conjunto completo de 56M corridas (Mar–Mai 2023). A NN usa 
 
 O arquivo `rideshare_data.parquet` (~12 GB, ~365M linhas) é o dataset Kaggle "NYC Rideshare Raw Data" (aaronweymouth), um preprocessamento do HVFHV TLC cobrindo Dez/2021 a Ago/2023. Contém somente Uber e Lyft.
 
-**Recorte usado no projeto:** março a agosto de 2023 (6 meses, ~116M linhas após filtragem bronze).
+**Recorte usado no projeto:** março a agosto de 2023 (6 meses, ~116M linhas após o filtro temporal).
 
 O split temporal `SPLIT_DATE = "2023-06-01"` divide:
 - **Treino:** março, abril, maio 2023 — 56.3M linhas
@@ -33,7 +33,7 @@ O split temporal `SPLIT_DATE = "2023-06-01"` divide:
 ## Pré-requisitos
 
 - Docker + Docker Compose
-- ~15 GB de espaço em disco (imagens + dados + silver)
+- ~15 GB de espaço em disco (imagens + dados + dataset preparado)
 - `rideshare_data.parquet` em `./data/`
 - `taxi_zone_lookup.csv` em `./data/` (disponível no repositório da TLC)
 - Máquina com no mínimo 8 GB de RAM (recomendado: 16 GB)
@@ -52,7 +52,7 @@ O split temporal `SPLIT_DATE = "2023-06-01"` divide:
 │   ├── rideshare_data.parquet  # dataset Kaggle (gitignore)
 │   ├── taxi_zone_lookup.csv
 │   └── silver/
-│       └── trips_silver/       # gerado pelo notebook 02
+│       └── trips_silver/       # dataset preparado, gerado pelo notebook 02
 ├── docs/
 │   ├── data_dictionary.md
 │   ├── decisions_log.md
@@ -111,7 +111,7 @@ docker compose exec jupyter jupyter nbconvert \
   --ExecutePreprocessor.timeout=3600 \
   notebooks/01_eda.ipynb
 
-# Preprocessing (silver)
+# Preparação dos dados
 docker compose exec jupyter jupyter nbconvert \
   --to notebook --execute --inplace \
   --ExecutePreprocessor.timeout=7200 \
@@ -178,7 +178,7 @@ O Jupyter container usa a mesma imagem base dos workers (`apache/spark:3.5.8-pyt
 
 | Arquivo | Descrição |
 |---------|-----------|
-| `data/silver/trips_silver/` | Silver layer particionada por `pickup_year_month` |
+| `data/silver/trips_silver/` | Dataset preparado, particionado por `pickup_year_month` |
 | `results/cleaning_bounds.json` | Percentis 0.1%/99.9% usados no DQ gate |
 | `results/model_comparison.csv` | Todas as runs com run_id, timestamp, métricas |
 | `results/feature_importance_decision_tree.png` | Top 15 features da árvore |
